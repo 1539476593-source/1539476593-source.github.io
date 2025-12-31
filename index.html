@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>广州美食地图——酶氢脱酸果苹</title>
+    <style>
+        :root {
+            --accent: #c2373b; /* 要求的红点颜色 */
+            --glass: rgba(255, 255, 255, 0.5); /* 极透毛玻璃 */
+            --font-main: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-main);
+            background: #f4f4f4;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* 顶部悬浮导航 - 极致通透玻璃拟态（核心修改：强制一行显示） */
+        .filter-container {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            gap: 8px; /* 缩小间距，适配一行 */
+            padding: 8px;
+            background: var(--glass);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border-radius: 50px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            justify-content: center;
+            white-space: nowrap; /* 禁止容器内换行 */
+            overflow: hidden; /* 隐藏溢出（小屏极端情况） */
+            width: fit-content; /* 宽度自适应内容 */
+        }
+
+        .filter-btn {
+            padding: 10px 20px; /* 微调内边距，减少宽度占用 */
+            border: none;
+            border-radius: 30px;
+            background: transparent;
+            color: #1d1d1f;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap; /* 按钮文字不换行 */
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 6px 20px rgba(194, 55, 59, 0.3);
+        }
+
+        #mapContainer { width: 100%; height: 100%; }
+
+        /* --- 要求的点位动画：更高级的复合层次 --- */
+        .custom-marker {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .marker-core {
+            width: 14px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 12px rgba(194, 55, 59, 0.5);
+            z-index: 3;
+        }
+
+        /* 柔和呼吸晕 */
+        .marker-glow {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: var(--accent);
+            border-radius: 50%;
+            opacity: 0.2;
+            animation: breathe 3s ease-in-out infinite;
+            z-index: 2;
+        }
+
+        /* 外层扩散圈 */
+        .marker-ripple {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid var(--accent);
+            border-radius: 50%;
+            animation: ripple 3s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+            z-index: 1;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.2; }
+            50% { transform: scale(1.8); opacity: 0.4; }
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(1); opacity: 1; }
+            80%, 100% { transform: scale(5); opacity: 0; }
+        }
+
+        /* --- 信息窗口卡片样式 --- */
+        .info-card {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 25px 55px rgba(0,0,0,0.15);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            animation: cardFadeIn 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes cardFadeIn {
+            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .card-img { width: 100%; height: 160px; object-fit: cover; }
+        .card-body { padding: 24px; }
+        .card-title { font-size: 22px; font-weight: 700; color: #1d1d1f; margin-bottom: 8px; }
+        .card-desc { font-size: 14px; color: #515154; line-height: 1.6; margin-bottom: 15px; }
+        .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 15px; }
+        .card-price { font-weight: 700; font-size: 16px; color: #1d1d1f; }
+
+        /* 高德组件清理 */
+        .amap-info-content { background: none; padding: 0; border: none; box-shadow: none; }
+        .amap-info-sharp { display: none; }
+        .amap-info-close { color: white !important; font-size: 24px !important; top: 15px !important; right: 15px !important; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
+
+    <div class="filter-container">
+        <button class="filter-btn active" data-filter="all">全部美食</button>
+        <button class="filter-btn" data-filter="校园餐饮">校园餐饮</button>
+        <button class="filter-btn" data-filter="广式风味">广式风味</button>
+        <button class="filter-btn" data-filter="潮汕风味">潮汕风味</button>
+        <button class="filter-btn" data-filter="川湘美食">川湘美食</button>
+        <button class="filter-btn" data-filter="特色美食">特色美食</button>
+        <button class="filter-btn" data-filter="宵夜烧烤">宵夜烧烤</button>
+        <button class="filter-btn" data-filter="西餐">西餐</button>
+        <button class="filter-btn" data-filter="甜品饮料">甜品饮料</button>
+    </div>
+
+    <div id="mapContainer"></div>
+
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=f6ba69344cecaa9c278e5e4a566066ad"></script>
+    <script>
+        const map = new AMap.Map('mapContainer', {
+            zoom: 16,
+            center: [113.3456, 23.1422], // 华南师范大学石牌校区中心
+            viewMode: '3D',
+            pitch: 40,
+            mapStyle: 'amap://styles/whitesmoke'
+        });
+
+        // 替换为8大类分类的完整数据（已移除重复条目）
+        const foodData = [
+            { name: "杨记汕头牛肉店（长兴店）", pos: [113.346821, 23.162547], cat: "潮汕风味", desc: "长兴路的老字号潮汕牛肉店，现切鲜牛肉纹理清晰，吊龙和五花趾口感绝佳，牛骨汤底浓郁，配上沙茶酱嘎嘎嘎好吃", img: "https://picui.cn/thumbnails/98d964855f73f78718e2d327952c0d26.png", price: "30￥/人" },
+            { name: "曜一城星巴克", pos: [113.345189, 23.160872], cat: "甜品饮料", desc: "曜一城购物中心一楼的星巴克，空间宽敞有落地窗，经典拿铁和星冰乐是招牌，适合休闲小憩或办公，不足就是舒服的座位太矮了。", img: "https://qcloud.dpfile.com/pc/cS49urPs5hPaG49C8ytmNy0jmFzkzKvG-1TYrSnmpki4XrhxNDB6h9AEGpfm2Rdl_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥30/人" },
+            { name: "龙口西韩特兰", pos: [113.338976, 23.139458], cat: "特色美食", desc: "龙口西路的正宗韩料店，部队火锅用料丰富，石锅拌饭和辣炒年糕口味地道，性价比高，深受学生和白领喜爱。", img: "https://qcloud.dpfile.com/pc/JNfJOxDGBUn01bFpvRDzvxjLxP-VaKZt3E69bXSH9WENVeMRrcfTAV4GTzFPwnWA_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥30/人" },
+            { name: "华师沁园美食", pos: [113.353808, 23.139183], cat: "校园餐饮", desc: "华师三大食堂之一，二楼鱼皮水饺面和自选菜深受学子喜爱，承载无数华师人回忆，二楼的麻辣香锅很不赖（烧烤味），猪肚鸡也行。", img: "https://qcloud.dpfile.com/pc/KxOVoyLi6bB-iFXk6T3EnzzSIUUjsH2gQtRlsSfELiVDywS65CbY20H4fuiRFG3u_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥15/人" },
+            { name: "华师陶园美食", pos: [113.351495, 23.138544], cat: "校园餐饮", desc: "1994年投入运营，两层楼供应早午晚餐及宵夜，有大众快餐、烧腊，二楼西北很有特色，另一半餐厅的菜品都蛮好吃的比较推荐。", img: "https://qcloud.dpfile.com/pc/_En2tWcB4yaiqVtT1krVdYPQFTEV7cJcfa5v2a5HXxmeIpK-Wq1Q0jar5EBmPSqY_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥13-100/人" },
+            { name: "华农绿榕园美食", pos: [113.354986, 23.156229], cat: "校园餐饮", desc: "位于三角市对面校医院旁，一楼芝士焗饭会拉丝，二楼石锅拌饭和重庆小面人气高，五楼天台可围炉煮茶，没踩过雷，另外一楼的冰浆很特别，很好喝啊！特别推荐这个冰奖，对了一楼面包店也不赖，饭后再买瓶蓝莓味的浓稠酸奶真是惬意！", img: "https://qcloud.dpfile.com/pc/KpzfypjrGewvTqYoFp1mt3R2_bUYf3JykssCyyHCW_SIPqIGakIbv71pwA7GPM57_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥25/人" },
+            { name: "鹭江站彩点", pos: [113.293654, 23.086782], cat: "广式风味", desc: "鹭江站D口旁羊城秀二楼的老字号茶楼，点心全天候打折，早茶6.8折、午茶8.5折、晚茶5折，芋泥餐包很酥很酥，布丁更是前无古人后无来者，虾饺也很新鲜，常去的一家店，推荐推荐。", img: "https://picui.cn/thumbnails/cfe2a0d478b3583ef7ed848619463dab.png", price: "￥40/人" },
+            { name: "籍友咖啡", pos: [113.341747, 23.137875], cat: "甜品饮料", desc: "龙口东路凯科榕合院内的小众咖啡店，环境安静适合办公，咖啡特别特别香醇，喜欢靠窗坐，插座充足，位置也够，偶尔还有哈吉米出没，每个期末周都要去嘿嘿。", img: "https://picui.cn/thumbnails/14c01cd4b841ed2702b60f937ea0201e.png", price: "￥25/人" },
+            { name: "正佳广场赤坂一丁", pos: [113.327019, 23.132145], cat: "宵夜烧烤", desc: "太好吃了，隔一段时间就要去一次，不然感觉有点食欲不振，饭后再上二楼买个DQ冰淇淋真是快哉快哉。", img: "https://picui.cn/thumbnails/7c911229c0c6f6719508ce9d6cc409f4.png", price: "￥80/人" },
+            { name: "天娱广场滨寿司", pos: [113.339996, 23.135703], cat: "特色美食", desc: "我觉得比寿司郎更好吃，至少抹茶粉比寿司朗的强，上菜飞快，就是常年排队，下午4点没到就只能排队。", img: "https://img.meituan.net/content/686f2a7a43f2ffa98089c8961426baff116214.jpg%40750w_1e_1l%7Cwatermark%3D0.webp", price: "￥45/人" },
+            { name: "岗顶天宝食坊", pos: [113.336690, 23.133331], cat: "广式风味", desc: "太好吃了，很有锅气，啫啫煲贼香，生蚝也很大，份量都不错，在二楼的蚝啫大排档，生啫金边花鳝和牛炒牛河（两个人吃不完）是招牌，营业至凌晨6点。", img: "https://s41.ax1x.com/2025/12/31/pZNsJ9P.jpg", price: "￥90/人" },
+            { name: "chatchatT咖啡", pos: [113.330474, 23.117965], cat: "甜品饮料", desc: "猎德站A口旁优托邦西翼的咖啡书店，环境明亮淡雅有图书墙，茉莉冷萃和芒果卷口碑好，适合学习办公和朋友小聚，主要是插座比较充足吧，味道不错，周末人略多，要带耳机（二楼架子鼓吵）。", img: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=600", price: "￥30/人" },
+            { name: "六运小区榆意糖水", pos: [113.326600, 23.130116], cat: "甜品饮料", desc: "六运三街的地道糖水铺，海南清补凉料足椰香浓郁，芒果小丸子和芋圆甜品清甜不腻，芝麻糊很淳，抹茶也很美味，是饭后甜品的绝佳选择。", img: "https://picui.cn/thumbnails/fb055893caadcd1819b2767132ad71b9.png", price: "￥20/人" },
+            { name: "六运小区何小东面馆", pos: [113.324699, 23.128496], cat: "特色美食", desc: "⭐⭐这是我们第一次约饭去的地方，其实并没有特别惊艳好吃，面做的还不赖，劲道十足，香辣炒鸡面和沙茶牛腩捞面是招牌，辣度我们两比较难接受，不管怎么样我希望这家店能生意兴隆。", img: "https://s41.ax1x.com/2025/12/31/pZNsBAs.png", price: "￥35/人" },
+            { name: "天河新天地啫爷啫啫煲", pos: [113.344353, 23.172073], cat: "广式风味", desc: "天河客运站D口旁天河新天地5楼，大厨有22年粤菜经验，咸蛋黄啫鸡翅（赞👍）和牛腩啫肠粉锅气十足，镬气满满。", img: "https://qcloud.dpfile.com/pc/YC-l0Rr27G0-lpeamOBR_i9mK0jHcA44n2dORw0BPVBbkUHr_nGTG1yZABEADaLN_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥55/人" },
+            { name: "西门口潮惠居饮食店", pos: [113.260069, 23.122345], cat: "潮汕风味", desc: "西门口附近光塔路的老字号潮菜馆，招牌鲍鱼捞面鲍鱼厚实弹牙，沙茶牛腩捞面和鱼蛋粉是地道潮汕味，性价比高。", img: "https://s41.ax1x.com/2025/12/31/pZNstc8.jpg", price: "￥40/人" },
+            { name: "岗顶的阿强家菜馆", pos: [113.337542, 23.132865], cat: "川湘美食", desc: "岗顶地铁站附近的人气川菜馆，招牌酸菜鱼分量足、鱼片滑嫩，毛血旺麻辣鲜香，烧腊也不赖（猪颈肉），还配茶碗，有点广式其实，饭点常需排队。", img: "https://qcloud.dpfile.com/pc/SUcZIVGo0B2yUFaE1pm0nYaf8XaX4sOil1M3nZz2bnW7MH82OQiVKh15BXJEi9Pq_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥75/人" },
+            { name: "珠江新城大龙燚火锅", pos: [113.326518, 23.121876], cat: "川湘美食", desc: "珠江新城的连锁川味火锅店，牛油锅底醇厚香浓，鲜毛肚、鸭肠七上八下口感脆嫩，装修风格复古有格调。", img: "https://s41.ax1x.com/2025/12/31/pZNs8ht.jpg", price: "￥120/人" },
+            { name: "潮汕仔特色店(广州总店)", pos: [113.325847, 23.168921], cat: "潮汕风味", desc: "梅花园广州大道北的正宗潮汕风味总店，招牌卤鹅皮香肉嫩，蚝仔烙外酥里嫩蚝肉饱满，鱼丸汤Q弹鲜甜，叽里呱啦最后用量大管饱概括吧嘻嘻。", img: "https://qcloud.dpfile.com/pc/R50KPiheu76KpQZgTTDce1fRHYCOhxGE8sA7neXvJ1idgiTVYiX_4DrFy-mRcmUgY0q73sB2DyQcgmKUxZFQtw.jpg", price: "￥35/人" },
+            { name: "悠本牛排(花城汇店)", pos: [113.324568, 23.124789], cat: "西餐", desc: "花城汇南区的高品质牛排店，原切牛排鲜嫩多汁，黑胡椒酱汁浓郁，搭配自助沙拉吧和浓汤，虽然是牛排店但是薯条香哭了，那个可颂里面夹着咸蛋黄酱也很好吃。", img: "https://qcloud.dpfile.com/pc/ZCGZHncyq8nAyGRVNqEtLD9Pr_jY5-e2WJv99s4v1_kqeJ1W3CqrJsASlsTeDV6B_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥80/人" },
+            { name: "合德小厨烧鹅乳鸽(永庆坊店)", pos: [113.254876, 23.120345], cat: "广式风味", desc: "永庆坊内的人气粤菜小馆，烧鹅皮脆肉嫩、卤汁香浓，乳鸽外皮焦香内里多汁，没什么踩雷的菜，人很多可能要提前订位。", img: "https://qcloud.dpfile.com/pc/9A6FrR-_dS74LrVJjpOrO0XgEd18kriQDAw51AgZJuJfWP53SbtQKhkOmX74Alsz_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥80/人" },
+            { name: "仙人烧烤(厦滘店)", pos: [113.368921, 23.098765], cat: "宵夜烧烤", desc: "厦滘地铁站附近的网红烧烤店（xhs有号），主打东北风味烤串，烤羊肉串肥瘦相间，品种很丰富，价格也合适，烤实蛋和烤蚕蛹极具特色（但是我没吃过这几个hhh）。", img: "https://picui.cn/thumbnails/d6c61b7b51ce19e954b9f55ded9a7c2c.png", price: "￥75/人" },
+            { name: "江南西路赵记传承", pos: [113.286743, 23.115678], cat: "甜品饮料", desc: "江南西路的连锁广式糖水铺，姜撞奶香醇顺滑、双皮奶入口即化，还有龟苓膏、芋圆等传统甜品，价格亲民（哪里的赵记都差不多，只是拍照留的是这家）。", img: "https://picui.cn/thumbnails/7c2cf70b4955498b3c48a944f5ec0ae3.png", price: "￥25/人" },
+            { name: "北京路大头虾", pos: [113.265432, 23.127890], cat: "特色美食", desc: "北京路步行街的人气越南菜，招牌大头虾肉质饱满、咖喱香浓，越南春卷清爽解腻，环境充满东南亚风情，我还挺喜欢的，就是人有点多，建议多人来吃更划算。", img: "https://qcloud.dpfile.com/pc/iL4xuXfltZXqjMk1L-ZXOsbVqsx9THJxaUfyqPAWaa3PyL39RpxAiGdNf72JYJqu_rmkDar_7uWkREVD3Q9cfjBdApxUyvX0xAZ0By9OkEc.webp", price: "￥80/人" },
+            { name: "六运小区荔芳传统糖水铺", pos: [113.325789, 23.129456], cat: "甜品饮料", desc: "六运小区内的老字号糖水铺，专注传统广式糖水，绿豆沙绵密清甜、芝麻糊香浓顺滑，是老广州的味道，就是有时候也要排队。", img: "https://p0.meituan.net/poiugc/ecff86d280fd4dadf8c253aea0a4c6422780979.png%40750w_1e_1l%7Cwatermark%3D0.webp", price: "￥20/人" },
+            { name: "岗顶春山咖啡", pos: [113.338214, 23.134567], cat: "甜品饮料", desc: "岗顶附近的小众精品咖啡店，主打手冲咖啡，豆子风味独特，环境安静舒适，搭配现烤司康，适合学习办公。（不足就是有股味道，比较昏暗）", img: "https://s41.ax1x.com/2025/12/31/pZNBEff.jpg", price: "￥35/人" }
+        ];
+
+        let allMarkers = [];
+        const infoWindow = new AMap.InfoWindow({ 
+            isCustom: true, 
+            offset: new AMap.Pixel(0, -40),
+            autoMove: false // 彻底禁用自带位移
+        });
+
+        function renderMarkers() {
+            foodData.forEach(item => {
+                const dom = document.createElement('div');
+                dom.className = 'custom-marker';
+                dom.innerHTML = `<div class="marker-ripple"></div><div class="marker-glow"></div><div class="marker-core"></div>`;
+
+                const marker = new AMap.Marker({
+                    position: item.pos,
+                    content: dom,
+                    offset: new AMap.Pixel(-25, -25),
+                    extData: item
+                });
+
+                marker.on('click', () => {
+                    const content = `
+                        <div class="info-card">
+                            <img src="${item.img}" class="card-img">
+                            <div class="card-body">
+                                <div class="card-title">${item.name}</div>
+                                <div class="card-desc">${item.desc}</div>
+                                <div class="card-footer">
+                                    <div style="color:#ff9f0a">★ 4.8</div>
+                                    <div class="card-price">${item.price}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    infoWindow.setContent(content);
+                    infoWindow.open(map, item.pos);
+
+                    // --- 核心逻辑：绝对像素偏移定位 ---
+                    
+                    // 1. 获取地图容器尺寸
+                    const container = map.getContainer();
+                    const w = container.offsetWidth;
+                    const h = container.offsetHeight;
+
+                    // 2. 我们的目标位置（屏幕正中心下部靠近底部的地方，即 1/5 处）
+                    const targetX = w / 2;
+                    const targetY = h * 0.8; // 80% 的高度位置，即底部 1/5
+
+                    // 3. 获取点击的点位当前在屏幕上的实际像素坐标
+                    const currentPixel = map.lngLatToContainer(item.pos);
+
+                    // 4. 计算为了把点移到目标位置，地图需要平移的像素差值
+                    // 地图平移方向与点位移动方向相反，所以用 目标 - 当前
+                    const dx = targetX - currentPixel.x;
+                    const dy = targetY - currentPixel.y;
+
+                    // 5. 执行精准平移
+                    map.panBy(dx, dy);
+                });
+
+                marker.setMap(map);
+                allMarkers.push(marker);
+            });
+        }
+
+        // 筛选按钮（适配新的8大类筛选逻辑）
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelector('.filter-btn.active').classList.remove('active');
+                this.classList.add('active');
+                const f = this.dataset.filter;
+                allMarkers.forEach(m => {
+                    (f === 'all' || m.getExtData().cat === f) ? m.show() : m.hide();
+                });
+                infoWindow.close();
+            });
+        });
+
+        map.on('click', () => infoWindow.close());
+        renderMarkers();
+    </script>
+</body>
+</html>
